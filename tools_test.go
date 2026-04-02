@@ -735,11 +735,11 @@ func interfaceFieldHandler(ctx context.Context, params interfaceFieldParams) (st
 
 func TestConvertToolHandlesInterfaceFields(t *testing.T) {
 	// The Mapper in the reflector should convert interface{}/any fields to
-	// empty object schemas {}, so ConvertTool should succeed (not error).
+	// an anyOf schema listing all JSON types, so ConvertTool should succeed.
 	tool, _, err := ConvertTool("interface_tool", "Tool with interface field", interfaceFieldHandler)
 	require.NoError(t, err)
 
-	// Verify the schema contains an object for the model field, not bare true
+	// Verify the schema contains an anyOf for the model field, not bare true
 	var schema map[string]any
 	err = json.Unmarshal(tool.RawInputSchema, &schema)
 	require.NoError(t, err)
@@ -748,5 +748,26 @@ func TestConvertToolHandlesInterfaceFields(t *testing.T) {
 	model := props["model"]
 	modelObj, ok := model.(map[string]any)
 	require.True(t, ok, "model property should be an object schema, got %T", model)
+
+	// Verify that the model field has an anyOf with all JSON types
+	anyOf, ok := modelObj["anyOf"].([]any)
+	require.True(t, ok, "model property should have anyOf, got %v", modelObj)
+	assert.Len(t, anyOf, 6, "anyOf should contain all 6 JSON types")
+
+	// Collect all types from anyOf
+	types := make([]string, 0, len(anyOf))
+	for _, item := range anyOf {
+		itemObj, ok := item.(map[string]any)
+		require.True(t, ok, "anyOf item should be an object")
+		typ, ok := itemObj["type"].(string)
+		require.True(t, ok, "anyOf item should have a type string")
+		types = append(types, typ)
+	}
+	assert.Contains(t, types, "string")
+	assert.Contains(t, types, "number")
+	assert.Contains(t, types, "boolean")
+	assert.Contains(t, types, "object")
+	assert.Contains(t, types, "array")
+	assert.Contains(t, types, "null")
 	t.Logf("model schema: %v", modelObj)
 }
